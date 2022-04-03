@@ -1,7 +1,7 @@
 from keras import layers as L
-from keras_transformer import get_encoder_component, get_decoder_component
-from keras_multi_head import MultiHeadAttention
-from keras_pos_embd import TrigPosEmbedding
+from model.keras_tf.transformer import get_encoder_component, get_decoder_component
+from model.keras_tf.multi_head_attention import MultiHeadAttention
+from model.keras_tf.positional_embedding import TrigPosEmbedding
 
 
 def ref_tf(encoder_input,
