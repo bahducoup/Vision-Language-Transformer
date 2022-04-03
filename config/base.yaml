@@ -27,7 +27,7 @@ workers: 8
 max_queue_size: 10
 
 #lang
-word_embed: en_vectors_web_lg
+word_embed: en_core_web_lg
 word_len: 15
 embed_dim: 300
 lang_att: True
