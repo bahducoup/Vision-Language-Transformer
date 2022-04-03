@@ -1,7 +1,7 @@
 ---
 #path
-train_set: ./data/anns/refcoco/train.txt
-evaluate_set: ./data/anns/refcoco/val.txt
+train_set: ./data/anns/refcoco/train.json
+evaluate_set: ./data/anns/refcoco/val.json
 seg_gt_path: ./data/masks/refcoco
 image_path: ./data/images/train2014
 pretrained_weights: ./data/weights/yolov3_480000.h5
