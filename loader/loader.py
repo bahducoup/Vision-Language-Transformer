@@ -18,6 +18,7 @@ class Generator(keras.utils.Sequence):
     ):
         self.shuffle = shuffle
         self.data = data
+        print("dataset size", len(data))
         self.config = config
         self.train_mode = train_mode
         self.batch_size = config.batch_size

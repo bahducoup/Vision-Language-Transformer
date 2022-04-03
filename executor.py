@@ -62,17 +62,17 @@ class Executor(object):
             print("Using SINGLE GPU Only")
             model_body_para = model_body
 
-        model_loss = Lambda(yolo_loss,
-                            output_shape=(1,),
-                            name='yolo_loss',
-                            arguments={'batch_size': self.config.batch_size})(
-            [model_body_para.output, seg_gt])
+        # model_loss = Lambda(yolo_loss,
+        #                     output_shape=(1,),
+        #                     name='yolo_loss',
+        #                     arguments={'batch_size': self.config.batch_size})(
+        #     [model_body_para.output, seg_gt])
 
-        model = Model([model_body_para.input[0],
-                       model_body_para.input[1],
-                       seg_gt], model_loss)
+        # model = Model([model_body_para.input[0],
+        #                model_body_para.input[1],
+        #                seg_gt], lambda y_true, y_pred: y_pred)
         print('Model created.')
-
+        model = model_body
         return model, model_body_para, model_body
 
     def load_dataset(self, split):
@@ -178,21 +178,29 @@ class Trainer(Executor):
                                       max_queue_size=self.config.max_queue_size
                                       )
 
-
+import tensorflow as tf
+import numpy as np
 class Tester(Executor):
     def __init__(self, config, **kwargs):
         super(Tester, self).__init__(config, **kwargs)
 
     def build_callbacks(self):
-        self.evaluator = RedirectModel(Evaluate(self.dataset['val'], self.config, phase='test'), self.yolo_body)
+        self.evaluator = RedirectModel(Evaluate(self.dataset['train'], self.config, phase='train'), self.yolo_body)
+        # self.evaluator = RedirectModel(lambda x: print(x), self.yolo_body)
         self.evaluator.on_train_begin()
 
     def load_data(self):
-        self.dataset['val'], self.dataset_len['val'] = self.load_dataset('evaluate_set')
+        self.dataset['train'], self.dataset_len['train'] = self.load_dataset('train_set')
 
     def load_model(self, model_body):
-        model_body.load_weights(self.config.evaluate_model, by_name=False, skip_mismatch=False)
-        print('Load weights {}.'.format(self.config.evaluate_model))
+      initial_weights = [layer.get_weights() for layer in model_body.layers]
+      model_body.load_weights(self.config.evaluate_model, by_name=True,)
+      # model.load_weights(checkpoint, by_name=True)
+      for layer, initial in zip(model_body.layers, initial_weights):
+          weights = layer.get_weights()
+          if weights and all(tf.nest.map_structure(np.array_equal, weights, initial)):
+              print(f'Checkpoint contained no weights for layer {layer.name}!')
+      print('Load weights {}.'.format(self.config.evaluate_model))
 
     def eval(self):
         results = dict()
@@ -211,6 +219,9 @@ class Tester(Executor):
             for item in seg_prec:
                 f_w.write('prec@%.2f: %.4f' % (item, seg_prec[item])+'\n')
             f_w.write('\n')
+    
+    # def preprocess(self):
+
 
 
 class Debugger(Executor):

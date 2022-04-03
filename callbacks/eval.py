@@ -1,3 +1,6 @@
+from __future__ import annotations
+import enum
+from typing import List
 import keras
 import numpy as np
 from loader.loader import get_random_data
@@ -6,7 +9,42 @@ import keras.backend as K
 from matplotlib.pyplot import cm
 import spacy
 import progressbar
+from h5py import File, Dataset, string_dtype
+class PreprocessedDataset:
+    def __init__(self, f: File, last: Dataset, second_to_last: Dataset, third_to_last: Dataset, ids: Dataset) -> None:
+        self._f = f
+        self.last = last
+        self.second_to_last = second_to_last
+        self.third_to_last = third_to_last
+        self.ids = ids
 
+    def __del__(self):
+        self._f.close()
+
+    @property
+    def file_attrs(self):
+        return self._f.attrs
+
+    @classmethod
+    def dataset_names(cls) -> List[str]:
+        return ["last", "second_to_last", "third_to_last", "ids"]
+
+    @classmethod
+    def create_new(cls, file_path: str, sample_num: int) -> PreprocessedDataset:
+        """raises exception if file already exists"""
+        f = File(file_path, "w")
+        datasets = []
+        dims = [(sample_num, 13,13,1024), (sample_num, 26,26, 512), (sample_num, 52,52,256)]
+        for i,name in enumerate(cls.dataset_names()[:3]):
+            datasets.append(f.create_dataset(name, dims[i]))
+        datasets.append(f.create_dataset("ids", (sample_num,), dtype=string_dtype()))
+        return cls(f, *datasets)
+
+    @classmethod
+    def read_from_h5_file(cls, file_path: str, mode="r") -> PreprocessedDataset:
+        f = File(file_path, mode)
+        names = cls.dataset_names()
+        return cls(f, *[f[n] for n in names])
 
 class Evaluate(keras.callbacks.Callback):
     """ Evaluation callback for arbitrary datasets.
@@ -40,6 +78,8 @@ class Evaluate(keras.callbacks.Callback):
         self.input_image_shape = K.placeholder(shape=(2,))
         self.sess = K.get_session()
         self.eval_save_images_id = [i for i in np.random.randint(0, len(self.val_data), 200)]
+        self._dataset = PreprocessedDataset.create_new(f"aaaaaa.hdf5", len(self.val_data))
+        print("dataset size:", len(self.val_data))
         super(Evaluate, self).__init__()
 
     def on_epoch_end(self, epoch, logs=None):
@@ -99,45 +139,61 @@ class Evaluate(keras.callbacks.Callback):
 
             images = np.array(images)
             word_vecs = np.array(word_vecs)
-            mask_outs = self.model.predict_on_batch([images, word_vecs])
-            mask_outs = self.sigmoid_(mask_outs)  # logit to sigmoid
-            batch_size = mask_outs.shape[0]
-            for i in range(batch_size):
-                ih = gt_segs[i].shape[0]
-                iw = gt_segs[i].shape[1]
-                w, h = self.input_shape
-                scale = min(w / iw, h / ih)
-                nw = int(iw * scale)
-                nh = int(ih * scale)
-                dx = (w - nw) // 2
-                dy = (h - nh) // 2
+            mask_outs = self.model.predict_on_batch([images, word_vecs])   
+            img_name = data["img_name"]
+            # print(start, end)
+            # print(test_batch_size, "test batch")
+            # print("batch_size", len(batch_data))
+            # print(mask_outs.shape)
+            # print("images", len(images))
+            # print("fuck!!", np.array_equal(mask_outs[0], mask_outs[1]))
+            # print(mask_outs[0][0].shape, mask_outs[1][0].shape, mask_outs[2][0].shape)
+            self._dataset.last[start:end] = mask_outs[0][0]
+            self._dataset.second_to_last[start:end] = mask_outs[1][0]
+            self._dataset.third_to_last[start:end] = mask_outs[2][0]
+            self._dataset.ids[start:end] = img_name
 
-                pred_seg = mask_outs[i, :, :, 0]
+            # mask_outs = self.sigmoid_(mask_outs)  # logit to sigmoid
+            # batch_size = mask_outs.shape[0]
+            # for i in range(batch_size):
+            #     ih = gt_segs[i].shape[0]
+            #     iw = gt_segs[i].shape[1]
+            #     w, h = self.input_shape
+            #     scale = min(w / iw, h / ih)
+            #     nw = int(iw * scale)
+            #     nh = int(ih * scale)
+            #     dx = (w - nw) // 2
+            #     dy = (h - nh) // 2
 
-                pred_seg = cv2.resize(pred_seg, self.input_shape)
-                pred_seg = pred_seg[dy:nh + dy, dx:nw + dx, ...]
-                pred_seg = cv2.resize(pred_seg, (gt_segs[i].shape[1], gt_segs[i].shape[0]))
-                pred_seg = np.reshape(pred_seg, [pred_seg.shape[0], pred_seg.shape[1], 1])
+            #     pred_seg = mask_outs[i, :, :, 0]
 
-                # segmentation eval
-                iou, prec = self.cal_seg_iou(gt_segs[i], pred_seg, self.seg_min_overlap)
-                iou_all += iou
-                for item in prec:
-                    if prec_all.get(item):
-                        prec_all[item] += prec[item]
-                    else:
-                        prec_all[item] = prec[item]
+            #     pred_seg = cv2.resize(pred_seg, self.input_shape)
+            #     pred_seg = pred_seg[dy:nh + dy, dx:nw + dx, ...]
+            #     pred_seg = cv2.resize(pred_seg, (gt_segs[i].shape[1], gt_segs[i].shape[0]))
+            #     pred_seg = np.reshape(pred_seg, [pred_seg.shape[0], pred_seg.shape[1], 1])
 
-                if self.log_images:
-                    sent = sentences[i]['sent']
-                    cv2.imwrite('log/out_img/'+str(files_id[i])+'_'+sent+'_pred.png', pred_seg * 255)
-                    cv2.imwrite('log/out_img/'+str(files_id[i])+'_'+sent+'_gt.png', gt_segs[i])
-                    cv2.imwrite('log/out_img/'+str(files_id[i])+'_'+sent+'_img.png', images[i][dy:nh + dy, dx:nw + dx, ...] * 255)
+            #     # segmentation eval
+            #     iou, prec = self.cal_seg_iou(gt_segs[i], pred_seg, self.seg_min_overlap)
+            #     iou_all += iou
+            #     for item in prec:
+            #         if prec_all.get(item):
+            #             prec_all[item] += prec[item]
+            #         else:
+            #             prec_all[item] = prec[item]
 
-        pred_seg = iou_all / img_id
-        for item in prec_all:
-            prec_all[item] /= img_id
-        return pred_seg, prec_all
+            #     if self.log_images:
+            #         sent = sentences[i]['sent']
+            #         cv2.imwrite('log/out_img/'+str(files_id[i])+'_'+sent+'_pred.png', pred_seg * 255)
+            #         cv2.imwrite('log/out_img/'+str(files_id[i])+'_'+sent+'_gt.png', gt_segs[i])
+            #         cv2.imwrite('log/out_img/'+str(files_id[i])+'_'+sent+'_img.png', images[i][dy:nh + dy, dx:nw + dx, ...] * 255)
+
+        # pred_seg = iou_all / img_id
+        # for item in prec_all:
+        #     prec_all[item] /= img_id
+        # return pred_seg, prec_all
+        print(self._dataset.ids[:10])
+        print(self._dataset.second_to_last[10])
+        return 0, 0
 
     def cal_seg_iou(self, gt, pred, thresh=0.5):
         t = np.array(pred > thresh)

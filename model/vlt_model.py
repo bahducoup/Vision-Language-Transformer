@@ -152,16 +152,16 @@ def yolo_body(inputs, q_input, config):
     darknet = Model(inputs, V.darknet_body(inputs))
     Fv = [darknet.output, darknet.layers[152].output, darknet.layers[92].output]
 
-    fq, fq_word = build_nlp_model(q_input=q_input,
-                                  rnn_dim=config.rnn_hidden_size,
-                                  bidirection=config.rnn_bidirectional,
-                                  dropout=config.rnn_drop_out,
-                                  lang_att=config.lang_att,
-                                  return_raw=True)
+    # fq, fq_word = build_nlp_model(q_input=q_input,
+    #                               rnn_dim=config.rnn_hidden_size,
+    #                               bidirection=config.rnn_bidirectional,
+    #                               dropout=config.rnn_drop_out,
+    #                               lang_att=config.lang_att,
+    #                               return_raw=True)
 
-    mask_out = make_multitask_braches(Fv, fq, fq_word, config)
+    # mask_out = make_multitask_braches(Fv, fq, fq_word, config)
 
-    return Model([inputs, q_input], [mask_out])
+    return Model([inputs, q_input], Fv)
 
 
 def yolo_loss(args,

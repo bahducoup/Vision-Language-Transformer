@@ -7,7 +7,7 @@ from yacs.config import CfgNode as CN
 
 from executor import Tester, Trainer, Debugger
 
-MODES = ['train', 'test', 'debug']
+MODES = ['train', 'test', 'debug', 'preprocess']
 
 parser = argparse.ArgumentParser()
 parser.add_argument('phase', choices=MODES)
@@ -59,4 +59,7 @@ if __name__ == "__main__":
         elif (args.phase == 'debug'):
             debugger = Debugger(config)
             debugger.run()
+        elif args.phase == 'preprocess':
+            tester = Tester(config, GPUS=GPU_COUNTS, debug=args.debug)
+            tester.preprocess()
         print('Exited.')
