@@ -9,42 +9,9 @@ import keras.backend as K
 from matplotlib.pyplot import cm
 import spacy
 import progressbar
-from h5py import File, Dataset, string_dtype
-class PreprocessedDataset:
-    def __init__(self, f: File, last: Dataset, second_to_last: Dataset, third_to_last: Dataset, ids: Dataset) -> None:
-        self._f = f
-        self.last = last
-        self.second_to_last = second_to_last
-        self.third_to_last = third_to_last
-        self.ids = ids
 
-    def __del__(self):
-        self._f.close()
+from preprocess_data import PreprocessedDataset
 
-    @property
-    def file_attrs(self):
-        return self._f.attrs
-
-    @classmethod
-    def dataset_names(cls) -> List[str]:
-        return ["last", "second_to_last", "third_to_last", "ids"]
-
-    @classmethod
-    def create_new(cls, file_path: str, sample_num: int) -> PreprocessedDataset:
-        """raises exception if file already exists"""
-        f = File(file_path, "w")
-        datasets = []
-        dims = [(sample_num, 13,13,1024), (sample_num, 26,26, 512), (sample_num, 52,52,256)]
-        for i,name in enumerate(cls.dataset_names()[:3]):
-            datasets.append(f.create_dataset(name, dims[i]))
-        datasets.append(f.create_dataset("ids", (sample_num,), dtype=string_dtype()))
-        return cls(f, *datasets)
-
-    @classmethod
-    def read_from_h5_file(cls, file_path: str, mode="r") -> PreprocessedDataset:
-        f = File(file_path, mode)
-        names = cls.dataset_names()
-        return cls(f, *[f[n] for n in names])
 
 class Evaluate(keras.callbacks.Callback):
     """ Evaluation callback for arbitrary datasets.
@@ -148,10 +115,7 @@ class Evaluate(keras.callbacks.Callback):
             # print("images", len(images))
             # print("fuck!!", np.array_equal(mask_outs[0], mask_outs[1]))
             # print(mask_outs[0][0].shape, mask_outs[1][0].shape, mask_outs[2][0].shape)
-            self._dataset.last[start:end] = mask_outs[0][0]
-            self._dataset.second_to_last[start:end] = mask_outs[1][0]
-            self._dataset.third_to_last[start:end] = mask_outs[2][0]
-            self._dataset.ids[start:end] = img_name
+            self._dataset.write_item(img_name, mask_outs[0][0], mask_outs[1][0], mask_outs[2][0])
 
             # mask_outs = self.sigmoid_(mask_outs)  # logit to sigmoid
             # batch_size = mask_outs.shape[0]
@@ -191,8 +155,8 @@ class Evaluate(keras.callbacks.Callback):
         # for item in prec_all:
         #     prec_all[item] /= img_id
         # return pred_seg, prec_all
-        print(self._dataset.ids[:10])
-        print(self._dataset.second_to_last[10])
+        print(self._dataset._ids[:10])
+        print(self._dataset._second_to_last[10])
         return 0, 0
 
     def cal_seg_iou(self, gt, pred, thresh=0.5):
