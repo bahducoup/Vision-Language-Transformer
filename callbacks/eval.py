@@ -106,8 +106,9 @@ class Evaluate(keras.callbacks.Callback):
 
             images = np.array(images)
             word_vecs = np.array(word_vecs)
-            mask_outs = self.model.predict_on_batch([images, word_vecs])   
             img_name = data["img_name"]
+            if img_name not in self._dataset.id_lookup:
+                mask_outs = self.model.predict_on_batch([images, word_vecs])   
             # print(start, end)
             # print(test_batch_size, "test batch")
             # print("batch_size", len(batch_data))
@@ -115,7 +116,7 @@ class Evaluate(keras.callbacks.Callback):
             # print("images", len(images))
             # print("fuck!!", np.array_equal(mask_outs[0], mask_outs[1]))
             # print(mask_outs[0][0].shape, mask_outs[1][0].shape, mask_outs[2][0].shape)
-            self._dataset.write_item(img_name, mask_outs[0][0], mask_outs[1][0], mask_outs[2][0])
+                self._dataset.write_item(img_name, mask_outs[0][0], mask_outs[1][0], mask_outs[2][0])
 
             # mask_outs = self.sigmoid_(mask_outs)  # logit to sigmoid
             # batch_size = mask_outs.shape[0]
@@ -155,8 +156,10 @@ class Evaluate(keras.callbacks.Callback):
         # for item in prec_all:
         #     prec_all[item] /= img_id
         # return pred_seg, prec_all
+        # self._dataset = self._dataset.compress()
         print(self._dataset._ids[:10])
         print(self._dataset._second_to_last[10])
+        self._dataset.print_vitals()
         return 0, 0
 
     def cal_seg_iou(self, gt, pred, thresh=0.5):

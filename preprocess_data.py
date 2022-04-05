@@ -43,10 +43,10 @@ class PreprocessedDataset:
         if id not in self._id_lookup:
             idx = len(self._id_lookup)
             self._id_lookup[id] = idx
-            self._ids[id] = id
-            self._last[id] = last
-            self._second_to_last[id] = second_to_last
-            self._third_to_last[id] = third_to_last
+            self._ids[idx] = id
+            self._last[idx] = last
+            self._second_to_last[idx] = second_to_last
+            self._third_to_last[idx] = third_to_last
     
     def get_item_by_idx(self, idx: int):
         return ImageFeature(self._last[idx], self._second_to_last[idx], self._third_to_last[idx], self._ids[idx], idx)
@@ -61,7 +61,6 @@ class PreprocessedDataset:
     def id_lookup(self):
         return self._id_lookup
     
-    @property
     def print_vitals(self):
         print(f"unique images #: {len(self._id_lookup)}")
         print(f"file mode: {self._f.mode}")
@@ -89,7 +88,7 @@ class PreprocessedDataset:
         datasets.append(f.create_dataset("ids", (sample_num,), dtype=string_dtype()))
         return cls(
             f,
-            *datasets,
+            *datasets
         )
 
     @classmethod
@@ -97,7 +96,15 @@ class PreprocessedDataset:
         f = File(file_path, mode)
         names = cls.dataset_names()
         return cls(f, *[f[n] for n in names])
-
+    
+    def compress(self):
+        size= len(self.id_lookup)
+        compressed_data = self.create_new("compressed.hdf5", size)
+        compressed_data._id_lookup = self._id_lookup.copy()
+        compressed_data._last[:] = self._last[:size]
+        compressed_data._second_to_last[:] = self._second_to_last[:size]
+        compressed_data._third_to_last[:] = self._third_to_last[:size]
+        return compressed_data
 
 if __name__ == "__main__":
     data = PreprocessedDataset.read_from_h5_file("data/val_darknet.hdf5")
